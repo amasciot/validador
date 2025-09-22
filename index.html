@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Validador de CSV</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Validador y Procesador de CSV</h1>
+        
+        <div class="upload-area" id="dropZone">
+            <p>📁 Arrastra tu archivo CSV aquí o haz clic para seleccionar</p>
+            <p><small>Formato esperado: delimitador punto y coma (;)</small></p>
+            <input type="file" id="fileInput" accept=".csv" style="display: none;">
+        </div>
+
+        <div style="text-align: center;">
+            <button class="btn" id="processBtn" disabled>Validar y Procesar</button>
+            <button class="btn btn-danger" id="downloadBtn" disabled>Descargar CSV Corregido</button>
+        </div>
+
+        <div class="results" id="results" style="display: none;">
+            <h3>Resultados del Procesamiento</h3>
+            <div id="fileInfo"></div>
+            <div id="validationResults"></div>
+            <div id="columnStats"></div>
+            <div id="preview"></div>
+        </div>
+    </div>
+
+    <script src="js/validator.js"></script>
+</body>
+</html>
