@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Validador de CSV</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .upload-area {
+            border: 2px dashed #007bff;
+            padding: 30px;
+            text-align: center;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            background-color: #f8f9fa;
+            cursor: pointer;
+        }
+        .upload-area:hover {
+            background-color: #e9ecef;
+        }
+        .upload-area p {
+            margin: 0;
+            color: #666;
+        }
+        .btn {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        .btn:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .btn:hover:not(:disabled) {
+            background-color: #0056b3;
+        }
+        .btn-danger {
+            background-color: #dc3545;
+        }
+        .btn-danger:hover:not(:disabled) {
+            background-color: #c82333;
+        }
+        .results {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+        }
+        .file-info {
+            background-color: #e9ecef;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+        }
+        .column-stats {
+            margin-top: 15px;
+        }
+        .stat-item {
+            margin-bottom: 8px;
+            padding: 8px;
+            background-color: white;
+            border-radius: 4px;
+            border-left: 3px solid #28a745;
+        }
+        .error-item {
+            border-left: 3px solid #dc3545;
+            background-color: #fff5f5;
+        }
+        .warning-item {
+            border-left: 3px solid #ffc107;
+            background-color: #fffef0;
+        }
+        .preview {
+            margin-top: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+            background-color: white;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            font-size: 12px;
+        }
+        th, td {
+            padding: 6px;
+            text-align: left;
+            border: 1px solid #ddd;
+        }
+        th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+            position: sticky;
+            top: 0;
+            background-color: #f8f9fa;
+        }
+        .success {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .error {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .warning {
+            color: #ffc107;
+            font-weight: bold;
+        }
+        .row-error {
+            background-color: #ffe6e6;
+        }
+        .row-warning {
+            background-color: #fff3cd;
+        }
+        .validation-results {
+            margin-top: 20px;
+        }
+        .validation-item {
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Validador y Procesador de CSV</h1>
+        
+        <div class="upload-area" id="dropZone">
+            <p>📁 Arrastra tu archivo CSV aquí o haz clic para seleccionar</p>
+            <p><small>Formato esperado: delimitador punto y coma (;)</small></p>
+            <input type="file" id="fileInput" accept=".csv" style="display: none;">
+        </div>
+
+        <div style="text-align: center;">
+            <button class="btn" id="processBtn" disabled>Validar y Procesar</button>
+            <button class="btn btn-danger" id="downloadBtn" disabled>Descargar CSV Corregido</button>
+        </div>
+
+        <div class="results" id="results" style="display: none;">
+            <h3>Resultados del Procesamiento</h3>
+            <div id="fileInfo"></div>
+            <div id="validationResults"></div>
+            <div id="columnStats"></div>
+            <div id="preview"></div>
+        </div>
+    </div>
+
+    <script>
+        class CSVValidator {
+            constructor() {
+                this.fileInput = document.getElementById('fileInput');
+                this.dropZone = document.getElementById('dropZone');
+                this.processBtn = document.getElementById('processBtn');
+                this.downloadBtn = document.getElementById('downloadBtn');
+                this.results = document.getElementById('results');
+                this.fileInfo = document.getElementById('fileInfo');
+                this.validationResults = document.getElementById('validationResults');
+                this.columnStats = document.getElementById('columnStats');
+                this.preview = document.getElementById('preview');
+                
+                this.originalData = null;
+                this.processedData = null;
+                this.fileName = '';
+                this.headers = [];
+                this.expectedColumns = 0;
+                this.validationErrors = [];
+                
+                this.initializeEventListeners();
+            }
+            
+            initializeEventListeners() {
+                this.dropZone.addEventListener('click', () => {
+                    this.fileInput.click();
+                });
+                
+                this.fileInput.addEventListener('change', (e) => {
+                    this.handleFileSelect(e.target.files[0]);
+                });
+                
+                this.dropZone.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    this.dropZone.style.backgroundColor = '#e3f2fd';
+                });
+                
+                this.dropZone.addEventListener('dragleave', () => {
+                    this.dropZone.style.backgroundColor = '#f8f9fa';
+                });
+                
+                this.dropZone.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    this.dropZone.style.backgroundColor = '#f8f9fa';
+                    this.handleFileSelect(e.dataTransfer.files[0]);
+                });
+                
+                this.processBtn.addEventListener('click', () => {
+                    this.processCSV();
+                });
+                
+                this.downloadBtn.addEventListener('click', () => {
+                    this.downloadProcessedCSV();
+                });
+            }
+            
+            handleFileSelect(file) {
+                if (!file || !file.name.toLowerCase().endsWith('.csv')) {
+                    alert('Por favor, selecciona un archivo CSV válido.');
+                    return;
+                }
+                
+                this.fileName = file.name;
+                this.processBtn.disabled = false;
+                this.downloadBtn.disabled = true;
+                this.results.style.display = 'block';
+                
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    this.parseCSV(e.target.result);
+                };
+                reader.readAsText(file, 'ISO-8859-1');
+            }
+            
+            parseCSV(csvText) {
+                try {
+                    const lines = csvText.split('\n').filter(line => line.trim() !== '');
+                    
+                    if (lines.length === 0) {
+                        throw new Error('El archivo está vacío');
+                    }
+                    
+                    // Detectar delimitador (punto y coma)
+                    this.headers = lines[0].split(';').map(header => header.trim());
+                    this.expectedColumns = this.headers.length;
+                    
+                    const data = [];
+                    let rowErrors = [];
+                    
+                    for (let i = 1; i < lines.length; i++) {
+                        const values = lines[i].split(';');
+                        
+                        // Validar número de columnas
+                        if (values.length !== this.expectedColumns) {
+                            rowErrors.push({
+                                row: i + 1,
+                                expected: this.expectedColumns,
+                                actual: values.length,
+                                data: values.join(';')
+                            });
+                            continue;
+                        }
+                        
+                        const row = {};
+                        this.headers.forEach((header, index) => {
+                            row[header] = values[index] ? values[index].trim() : '';
+                        });
+                        data.push(row);
+                    }
+                    
+                    this.originalData = data;
+                    this.displayFileInfo(this.headers, data, rowErrors);
+                    
+                    if (rowErrors.length > 0) {
+                        this.displayValidationErrors(rowErrors);
+                    }
+                    
+                } catch (error) {
+                    this.showError('Error al leer el archivo CSV: ' + error.message);
+                }
+            }
+            
+            displayFileInfo(headers, data, errors) {
+                this.fileInfo.innerHTML = `
+                    <div class="file-info">
+                        <strong>Archivo:</strong> ${this.fileName}<br>
+                        <strong>Total de filas:</strong> ${data.length + errors.length}<br>
+                        <strong>Filas válidas:</strong> ${data.length}<br>
+                        <strong>Filas con errores:</strong> ${errors.length}<br>
+                        <strong>Total de columnas esperadas:</strong> ${headers.length}<br>
+                        <strong>Columnas detectadas:</strong> ${headers.join(', ')}
+                    </div>
+                `;
+                
+                let statsHTML = '<div class="column-stats"><h4>Conteo por columna:</h4>';
+                headers.forEach(header => {
+                    const count = data.filter(row => row[header] && row[header].trim() !== '').length;
+                    const percentage = ((count / data.length) * 100).toFixed(1);
+                    statsHTML += `
+                        <div class="stat-item">
+                            <strong>${header}:</strong> ${count} valores (${percentage}% lleno)
+                        </div>
+                    `;
+                });
+                statsHTML += '</div>';
+                
+                this.columnStats.innerHTML = statsHTML;
+            }
+            
+            displayValidationErrors(errors) {
+                let errorsHTML = `
+                    <div class="validation-results">
+                        <h4 class="error">⚠️ Errores de validación encontrados:</h4>
+                        <p>Se encontraron ${errors.length} filas con número incorrecto de columnas.</p>
+                `;
+                
+                errors.slice(0, 10).forEach(error => {
+                    errorsHTML += `
+                        <div class="validation-item error-item">
+                            <strong>Fila ${error.row}:</strong> Esperadas ${error.expected} columnas, 
+                            encontradas ${error.actual} columnas<br>
+                            <small>Datos: ${error.data.substring(0, 100)}${error.data.length > 100 ? '...' : ''}</small>
+                        </div>
+                    `;
+                });
+                
+                if (errors.length > 10) {
+                    errorsHTML += `<p>... y ${errors.length - 10} errores más</p>`;
+                }
+                
+                errorsHTML += `</div>`;
+                this.validationResults.innerHTML = errorsHTML;
+            }
+            
+            normalizeText(text) {
+                if (!text) return text;
+                
+                const replacements = {
+                    'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
+                    'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U',
+                    'ñ': 'n', 'Ñ': 'N',
+                    'ü': 'u', 'Ü': 'U'
+                };
+                
+                return text.toString().split('').map(char => 
+                    replacements[char] || char
+                ).join('');
+            }
+            
+            processCSV() {
+                if (!this.originalData) return;
+                
+                try {
+                    this.processedData = JSON.parse(JSON.stringify(this.originalData));
+                    
+                    let changesCount = 0;
+                    const columns = Object.keys(this.originalData[0] || {});
+                    
+                    this.processedData.forEach(row => {
+                        columns.forEach(column => {
+                            const originalValue = row[column];
+                            const normalizedValue = this.normalizeText(originalValue);
+                            
+                            if (originalValue !== normalizedValue) {
+                                changesCount++;
+                                row[column] = normalizedValue;
+                            }
+                        });
+                    });
+                    
+                    const resultsHTML = `
+                        <div class="success">
+                            ✅ Procesamiento completado.<br>
+                            • ${changesCount} normalizaciones de texto realizadas<br>
+                            • Tildes eliminadas, ñ convertida a n, ü convertida a u<br>
+                            • Archivo listo para descargar
+                        </div>
+                    `;
+                    
+                    this.validationResults.innerHTML += resultsHTML;
+                    this.displayPreview();
+                    this.downloadBtn.disabled = false;
+                    
+                } catch (error) {
+                    this.showError('Error al procesar el archivo: ' + error.message);
+                }
+            }
+            
+            displayPreview() {
+                if (!this.processedData || this.processedData.length === 0) return;
+                
+                const headers = Object.keys(this.processedData[0]);
+                const previewData = this.processedData.slice(0, 10);
+                
+                let tableHTML = '<h4>Vista previa (primeras 10 filas procesadas):</h4><table>';
+                
+                // Headers
+                tableHTML += '<tr>';
+                headers.forEach(header => {
+                    tableHTML += `<th>${header}</th>`;
+                });
+                tableHTML += '</tr>';
+                
+                // Rows
+                previewData.forEach(row => {
+                    tableHTML += '<tr>';
+                    headers.forEach(header => {
+                        const value = row[header] || '';
+                        tableHTML += `<td title="${value}">${value.substring(0, 30)}${value.length > 30 ? '...' : ''}</td>`;
+                    });
+                    tableHTML += '</tr>';
+                });
+                
+                tableHTML += '</table>';
+                this.preview.innerHTML = tableHTML;
+            }
+            
+            downloadProcessedCSV() {
+                if (!this.processedData) return;
+                
+                try {
+                    const headers = Object.keys(this.processedData[0]);
+                    let csvContent = headers.join(';') + '\r\n';
+                    
+                    this.processedData.forEach(row => {
+                        const values = headers.map(header => {
+                            let value = row[header] || '';
+                            // Escapar valores que contengan punto y coma
+                            if (value.includes(';') || value.includes('"') || value.includes('\n')) {
+                                value = `"${value.replace(/"/g, '""')}"`;
+                            }
+                            return value;
+                        });
+                        csvContent += values.join(';') + '\r\n';
+                    });
+                    
+                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                    const link = document.createElement('a');
+                    const url = URL.createObjectURL(blob);
+                    
+                    link.setAttribute('href', url);
+                    link.setAttribute('download', this.fileName.replace('.csv', '_procesado.csv'));
+                    link.style.visibility = 'hidden';
+                    
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    
+                } catch (error) {
+                    this.showError('Error al descargar el archivo: ' + error.message);
+                }
+            }
+            
+            showError(message) {
+                this.validationResults.innerHTML = `
+                    <div class="error">
+                        ❌ ${message}
+                    </div>
+                `;
+            }
+        }
+        
+        // Inicializar la aplicación
+        document.addEventListener('DOMContentLoaded', () => {
+            new CSVValidator();
+        });
+    </script>
+</body>
+</html>
